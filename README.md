@@ -1,2 +1,0 @@
-# AGMS
-Adaptive Memory Routing 
