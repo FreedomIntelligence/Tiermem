@@ -34,7 +34,7 @@ def load_data_huggingface(
     Args:
         dataset_name: 主数据集名称 (Accurate_Retrieval, Test_Time_Learning, 
                      Long_Range_Understanding, Conflict_Resolution)
-        sub_dataset_source: 子数据集名称（用于过滤source字段）
+        sub_dataset_source: 子数据集名称（用于过滤source字段，支持通配符匹配）
         max_test_samples: 最大样本数
         seed: 随机种子
         local_path: 本地数据集路径（如果已下载）
@@ -54,34 +54,68 @@ def load_data_huggingface(
     if dataset_name not in supported_splits:
         raise ValueError(f"Unknown dataset {dataset_name}. Available: {sorted(supported_splits)}")
     
-    # 尝试从本地加载（如果已下载）
-    if local_path:
-        local_dataset_path = Path(local_path) / dataset_name
-        if local_dataset_path.exists():
-            print(f"Loading from local path: {local_dataset_path}")
-            try:
-                raw_data = load_from_disk(str(local_dataset_path))
-                print(f"Loaded {len(raw_data)} samples from local disk")
-            except Exception as e:
-                print(f"Failed to load from local disk: {e}, falling back to HuggingFace")
-                raw_data = load_dataset("ai-hyz/MemoryAgentBench", split=dataset_name, revision="main")
-        else:
-            print(f"Local path not found, loading from HuggingFace...")
-            raw_data = load_dataset("ai-hyz/MemoryAgentBench", split=dataset_name, revision="main")
-    else:
-        # 从HuggingFace加载
+    # 尝试从本地路径加载
+    if local_path and Path(local_path).exists():
+        print(f"Loading from local path: {local_path}")
+        try:
+            raw_data = load_from_disk(local_path)
+            # 如果本地路径是数据集字典，需要选择对应的split
+            if isinstance(raw_data, dict):
+                if dataset_name in raw_data:
+                    raw_data = raw_data[dataset_name]
+                else:
+                    print(f"Warning: split '{dataset_name}' not found in local dataset, falling back to HuggingFace")
+                    local_path = None
+        except Exception as e:
+            print(f"Warning: Failed to load from local path {local_path}: {e}")
+            print("Falling back to HuggingFace...")
+            local_path = None
+    
+    # 如果本地加载失败，从HuggingFace加载
+    if not local_path or not Path(local_path).exists():
         print(f"Loading {sub_dataset_source} from HuggingFace: ai-hyz/MemoryAgentBench")
         raw_data = load_dataset("ai-hyz/MemoryAgentBench", split=dataset_name, revision="main")
     
     print(f"Loaded {len(raw_data)} samples from {dataset_name}")
     
-    # 按source过滤
+    # 按source过滤，支持通配符匹配
     original_length = len(raw_data)
-    filtered_data = raw_data.filter(
-        lambda sample: sample.get("metadata", {}).get("source", "") == sub_dataset_source
-    )
-    print(f"Filtered to {len(filtered_data)} samples matching source '{sub_dataset_source}' "
-          f"(from {original_length} total)")
+    
+    # 检查是否包含通配符
+    import fnmatch
+    if '*' in sub_dataset_source or '?' in sub_dataset_source:
+        # 使用通配符匹配
+        filtered_data = raw_data.filter(
+            lambda sample: fnmatch.fnmatch(
+                sample.get("metadata", {}).get("source", ""), 
+                sub_dataset_source
+            )
+        )
+        print(f"Filtered to {len(filtered_data)} samples matching source pattern '{sub_dataset_source}' "
+              f"(from {original_length} total)")
+    else:
+        # 精确匹配
+        filtered_data = raw_data.filter(
+            lambda sample: sample.get("metadata", {}).get("source", "") == sub_dataset_source
+        )
+        print(f"Filtered to {len(filtered_data)} samples matching source '{sub_dataset_source}' "
+              f"(from {original_length} total)")
+        
+        # 如果精确匹配失败，尝试通配符匹配（用于处理 longmemeval_s_-1_500 -> longmemeval_s*）
+        if len(filtered_data) == 0:
+            # 尝试将 sub_dataset_source 转换为通配符模式
+            # 例如: longmemeval_s_-1_500 -> longmemeval_s*
+            if 'longmemeval' in sub_dataset_source.lower():
+                pattern = 'longmemeval_s*'
+                print(f"No exact match found, trying pattern '{pattern}'...")
+                filtered_data = raw_data.filter(
+                    lambda sample: fnmatch.fnmatch(
+                        sample.get("metadata", {}).get("source", ""), 
+                        pattern
+                    )
+                )
+                print(f"Filtered to {len(filtered_data)} samples matching source pattern '{pattern}' "
+                      f"(from {original_length} total)")
     
     # 限制样本数
     if max_test_samples is not None and len(filtered_data) > max_test_samples:
@@ -191,10 +225,17 @@ def iter_sessions(
     if data_dir:
         local_path = data_dir
     else:
-        # 尝试使用默认路径
-        default_path = "/share/home/qmzhu/AGMS/data/MemoryAgentBench_data"
-        if Path(default_path).exists():
-            local_path = default_path
+        # 尝试使用多个可能的默认路径
+        default_paths = [
+            "/share/home/qmzhu/agent/MemoryAgentBench_data",
+            "/share/home/qmzhu/data/MemoryAgentBench_data",
+            "/share/home/qmzhu/AGMS/data/MemoryAgentBench_data/data"
+        ]
+        for default_path in default_paths:
+            if Path(default_path).exists():
+                local_path = default_path
+                print(f"Found local dataset at: {local_path}")
+                break
     
     # 加载数据
     samples = load_data_huggingface(

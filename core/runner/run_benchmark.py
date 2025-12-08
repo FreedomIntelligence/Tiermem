@@ -149,6 +149,7 @@ def run_benchmark(
     
     # Session级别的进度条
     session_pbar = tqdm(sessions, desc="Sessions", unit="session", ncols=100)
+    session_qa_count = 0  # 用于实时进度显示
     for session in session_pbar:
         session_id = session["session_id"]
         session_pbar.set_description(f"Session: {session_id[:30]}...")
@@ -158,8 +159,30 @@ def run_benchmark(
             session_pbar.set_postfix({"status": "skipped"})
             continue
         
-        # 重置系统状态
-        system.reset(session_id)
+        # 重置系统状态（防御性错误处理）
+        try:
+            system.reset(session_id)
+        except Exception as e:
+            print(f"\n⚠ 错误: Session {session_id} 的 reset() 失败: {e}")
+            print(f"  跳过该session，继续处理下一个...")
+            import traceback
+            traceback.print_exc()
+            session_pbar.set_postfix({"status": "reset_failed"})
+            # 标记为已处理（避免重复尝试），但记录错误
+            processed_sessions.add(session_id)
+            # 记录错误日志
+            error_log = {
+                "run_id": run_id,
+                "benchmark": benchmark_name,
+                "system": system.get_system_name(),
+                "session_id": session_id,
+                "error_type": "reset_failed",
+                "error_message": str(e),
+                "timestamp": datetime.utcnow().isoformat()
+            }
+            error_log_path = str(output_path / "errors.jsonl")
+            append_log_to_jsonl(error_log, error_log_path)
+            continue  # 跳过当前session，继续下一个
         
         # 1. 记忆写入阶段
         # 系统可以通过preferred_turns_key指定使用哪个粒度的turns
@@ -231,7 +254,11 @@ def run_benchmark(
                     qa_log["category"] = category
                 # 实时写入到文件（不保存在内存中，节省内存）
                 append_log_to_jsonl(qa_log, qa_logs_path)
+                session_qa_count += 1
             qa_pbar.close()
+        
+        # 更新进度条显示（显示已完成的QA数量）
+        session_pbar.set_postfix({"qa_completed": session_qa_count})
         
         # 标记该session已处理
         processed_sessions.add(session_id)
