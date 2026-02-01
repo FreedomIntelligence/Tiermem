@@ -1,7 +1,7 @@
 
 # Data
-data/locomo/*.jsonl
-
+data/locomo/*.json
+model/*
 
 #relatedworkspace
 relatedwork/
