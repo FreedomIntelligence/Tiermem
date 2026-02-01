@@ -12,6 +12,8 @@ A trained router model dynamically selects between these paths based on query co
 
 ## Architecture
 
+![TierMem Architecture](frame.jpg)
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                      TierMem System                         │
@@ -174,13 +176,7 @@ results/locomo/linked_view/my_run/
 
 If you use TierMem in your research, please cite:
 
-```bibtex
-@article{tiermem2025,
-  title={TierMem: Tiered Memory System for Long-Context Question Answering},
-  author={...},
-  journal={...},
-  year={2025}
-}
+
 ```
 
 ## License
