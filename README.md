@@ -14,19 +14,6 @@ A trained router model dynamically selects between these paths based on query co
 
 ![TierMem Architecture](frame.jpg)
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      TierMem System                         │
-├─────────────────────────────────────────────────────────────┤
-│  Query → Router → ┌─ S-path: Summary Index (fast)          │
-│                   │          ↓                              │
-│                   │    Semantic Search → Answer             │
-│                   │                                         │
-│                   └─ R-path: Page Store (detailed)          │
-│                              ↓                              │
-│                        BM25 + Rerank → Answer               │
-└─────────────────────────────────────────────────────────────┘
-```
 
 ## Installation
 
