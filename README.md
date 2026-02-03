@@ -1,4 +1,4 @@
-# TierMem: Tiered Memory System
+# From Lossy to Verified: A Provenance-Aware Tiered Memory for Agents
 
 A memory-augmented LLM system for long-context question answering with intelligent routing between summary-based and raw-retrieval pipelines.
 
