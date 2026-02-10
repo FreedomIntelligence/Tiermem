@@ -40,6 +40,8 @@ pip install -r requirements.txt
 export OPENAI_API_KEY=your_key_here
 export OPENAI_BASE_URL=your_base_url  # Optional
 ```
+### Model
+https://huggingface.co/FreedomIntelligence/TierMem
 
 ## Quick Start
 
