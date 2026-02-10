@@ -87,7 +87,7 @@ export OPENAI_API_KEY=your_key_here
 export OPENAI_BASE_URL=your_base_url  # Optional
 ```
 
-## Pretrained Model
+## Model
 
 Our trained router model is available on HuggingFace:
 
