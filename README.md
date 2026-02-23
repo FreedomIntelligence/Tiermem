@@ -6,6 +6,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![HuggingFace Model](https://img.shields.io/badge/🤗%20HuggingFace-Model-orange)](https://huggingface.co/FreedomIntelligence/TierMem)
 [![arXiv](https://img.shields.io/badge/arXiv-2602.17913-b31b1b.svg)](https://arxiv.org/abs/2602.17913)
+
+
 **A memory-augmented LLM system for long-context question answering with intelligent routing between summary-based and raw-retrieval pipelines.**
 
 [Installation](#installation) • [Quick Start](#quick-start) • [Model](#pretrained-model) • [Benchmarks](#supported-benchmarks) • [Training](#router-training)
