@@ -245,11 +245,14 @@ results/locomo/linked_view/my_run/
 If you use TierMem in your research, please cite our work:
 
 ```bibtex
-@article{tiermem2026,
-  title={From Lossy to Verified: A Provenance-Aware Tiered Memory for Agents},
-  author={Your Team},
-  journal={arXiv preprint arXiv:XXXX.XXXXX},
-  year={2026}
+@misc{zhu2026lossyverifiedprovenanceawaretiered,
+      title={From Lossy to Verified: A Provenance-Aware Tiered Memory for Agents}, 
+      author={Qiming Zhu and Shunian Chen and Rui Yu and Zhehao Wu and Benyou Wang},
+      year={2026},
+      eprint={2602.17913},
+      archivePrefix={arXiv},
+      primaryClass={cs.DB},
+      url={https://arxiv.org/abs/2602.17913}, 
 }
 ```
 
