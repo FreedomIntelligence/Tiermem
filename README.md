@@ -1,33 +1,46 @@
 <div align="center">
 
-# From Lossy to Verified: A Provenance-Aware Tiered Memory for Agents
+# TierMem: Balancing Compressed Memory and Raw Evidence for Long-Horizon Agent Memory
 
+[![COLM 2026](https://img.shields.io/badge/COLM_2026-Accepted-4466cc.svg)](https://openreview.net/forum?id=svKCa4itcd)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![HuggingFace Model](https://img.shields.io/badge/🤗%20HuggingFace-Model-orange)](https://huggingface.co/FreedomIntelligence/TierMem)
-[![arXiv](https://img.shields.io/badge/arXiv-2602.17913-b31b1b.svg)](https://arxiv.org/abs/2602.17913)
+[![arXiv preprint](https://img.shields.io/badge/arXiv-Earlier_preprint-b31b1b.svg)](https://arxiv.org/abs/2602.17913)
 
+Qiming Zhu · Shunian Chen · Rui Yu · Zhehao Wu · Benyou Wang
 
-**A memory-augmented LLM system for long-context question answering with intelligent routing between summary-based and raw-retrieval pipelines.**
+**Accepted at COLM 2026 🎉**
 
-[Installation](#installation) • [Quick Start](#quick-start) • [Model](#pretrained-model) • [Benchmarks](#supported-benchmarks) • [Training](#router-training)
+**Start with compact memory. Recover the details when they matter.**
+
+[Paper / OpenReview](https://openreview.net/forum?id=svKCa4itcd) · [Earlier preprint](https://arxiv.org/abs/2602.17913) · [Model](https://huggingface.co/FreedomIntelligence/TierMem) · [Citation](#citation)
+
+[Use cases](#when-this-helps) · [Results](#results) · [Quick start](#quick-start) · [Training](#router-training)
 
 </div>
 
----
+## News
+
+- **2026-07-08** — Celebrating TierMem's acceptance at **COLM 2026** 🎉 We've refreshed the title and results, and added a walkthrough of memory use during a long debugging session below.
+- **2026-02-20** — The first preprint appeared on [arXiv](https://arxiv.org/abs/2602.17913).
+
+The earlier preprint is titled *From Lossy to Verified: A Provenance-Aware Tiered Memory for Agents*. Follow the [OpenReview record](https://openreview.net/forum?id=svKCa4itcd) for the conference paper and updates.
 
 ## Table of Contents
 
 - [Overview](#overview)
+- [When This Helps](#when-this-helps)
 - [Key Features](#key-features)
 - [Architecture](#architecture)
+- [Results](#results)
 - [Installation](#installation)
-- [Pretrained Model](#pretrained-model)
+- [Model](#model)
 - [Quick Start](#quick-start)
 - [Project Structure](#project-structure)
 - [Router Training](#router-training)
 - [Supported Benchmarks](#supported-benchmarks)
-- [Results](#results)
+- [Evaluation Outputs](#evaluation-outputs)
 - [Configuration](#configuration)
 - [Citation](#citation)
 - [Contributing](#contributing)
@@ -36,52 +49,92 @@
 
 ## Overview
 
-TierMem implements a two-tier memory architecture that balances efficiency and accuracy for long-context question answering:
+A long-running agent needs both a useful working memory and a way to recover earlier details. A compact note might remember that a decision was made, while a later question needs the exact constraint, timestamp, or observation behind it. Those future questions are unknown when the note is written.
 
-1. **Summary Index (S-path)**: Fast semantic search over extracted facts using Mem0
-2. **Page Store (R-path)**: Raw conversation chunks with BM25 retrieval for detailed context
+TierMem stores experience at two linked levels:
 
-A trained router model dynamically selects between these paths based on query complexity, ensuring optimal performance across different types of questions.
+1. **Tier-1: compact memory.** Summaries and extracted facts provide a fast retrieval path. Each entry keeps links to its source pages.
+2. **Tier-2: raw evidence.** Original interaction pages preserve details that compact memory may omit.
+
+For each query, a learned router checks whether the retrieved compact memory contains enough evidence to answer. If it does, TierMem answers directly. Otherwise, it follows the source links to raw pages and performs bounded additional retrieval when needed. Recovered facts can then be consolidated into compact memory with their source links preserved.
+
+The decision is **whether the available evidence is sufficient for this question**. Even a short question can require an exact detail that the summary left out.
+
+## When This Helps
+
+We are interested in tasks where the same history is revisited for different reasons:
+
+| Setting | What compact memory can retain | What a later question may require |
+|---|---|---|
+| Long debugging sessions | The current plan, recent changes, and attempted fixes | The exact test output or earlier constraint behind a change |
+| Research across many documents | Findings, working hypotheses, and source pointers | An exact quotation, number, or methodological detail |
+| Assistants spanning multiple sessions | Preferences, plans, and recent updates | When a preference changed or which exception applied |
+
+### A long debugging session
+
+*An illustrative walkthrough with fictional messages and tool output.*
+
+An agent has been investigating a slow callback. After several rounds of work, its compact memory says:
+
+> The callback timeout was increased to 60 seconds after testing the slow path.
+
+That note points to the original history, which includes:
+
+```text
+[page-012 · user]
+The slow callback can take around 45 seconds. Keep callback retries capped at 2.
+
+[page-018 · test output]
+test_slow_callback, timeout=30s: FAIL — callback arrived after 43.2s.
+test_slow_callback, timeout=60s: PASS.
+```
+
+Hours later, the next question determines how much of that history is needed:
+
+| Later question | Expected memory access |
+|---|---|
+| "What timeout did we settle on?" | Answer **60 seconds** from compact memory. |
+| "Why did 30 seconds fail? Which test showed it?" | Follow the note's source link to `page-018` and recover the test name and **43.2-second** observation. |
+| "Can we just increase the retry count?" | Retrieve the earlier constraint from `page-012`: retries were explicitly capped at **2**. |
+
+After recovering the test evidence, consolidation can enrich the note with the observed delay and its source, making a repeated question cheaper to answer. This is the behavior we want to explore in long-running agents. The paper evaluates the memory mechanisms on **LoCoMo and LongMemEval conversational memory benchmarks**.
 
 ## Key Features
 
-✨ **Intelligent Routing** - Trained router automatically selects the best retrieval strategy
-🚀 **High Performance** - Optimized for long conversations with 100K+ tokens
-🎯 **Dual Retrieval Paths** - Combines semantic search and keyword-based retrieval
-🔄 **Provenance Tracking** - Maintains memory source verification and lineage
-📊 **Multi-Benchmark Support** - Evaluated on LoCoMo, LongMemEval, MemoryAgentBench, and more
-⚡ **Concurrent Processing** - Multi-worker support for batch evaluation
-🧠 **LLM-Agnostic** - Works with any OpenAI-compatible API
+- **Sufficiency routing:** a trained Qwen3-0.6B router selects compact or raw evidence for each query.
+- **Source-linked retrieval:** compact memories point back to the raw pages that support them.
+- **Bounded escalation:** additional retrieval can fill remaining evidence gaps within a fixed search budget.
+- **Evidence-backed consolidation:** recovered details can update compact memory while retaining their provenance. The paper studies consolidation through updates between evaluation epochs.
+- **Evaluation tooling:** benchmark runners record answer quality, routing, token use, and latency.
 
 ## Architecture
 
 <div align="center">
   <img src="frame.jpg" alt="TierMem Architecture" width="800"/>
-  <p><em>Two-tier memory system with intelligent routing between summary and raw retrieval paths</em></p>
+  <p><em>Compact memory first; source-linked raw evidence when the query needs more detail.</em></p>
 </div>
-
----
-
 
 ## Installation
 
 ### Prerequisites
 
 - Python 3.10+
-- Qdrant vector database
+- A running Qdrant vector database
+- An API endpoint for answer generation and embeddings
+- A served router for the default LoCoMo and LongMemEval configurations (see [Model](#model))
 - CUDA-capable GPU (for router training)
 
 ### Setup
 
 ```bash
 # Clone the repository
-git clone https://github.com/FreedomIntelligence/TierMem.git
-cd TierMem
+git clone https://github.com/FreedomIntelligence/Tiermem.git
+cd Tiermem
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Start Qdrant
+# Start Qdrant if its binary is installed locally or on PATH
 ./start_qdrant.sh
 
 # Set environment variables
@@ -91,7 +144,7 @@ export OPENAI_BASE_URL=your_base_url  # Optional
 
 ## Model
 
-Our trained router model is available on HuggingFace:
+Our trained router is available on Hugging Face:
 
 <div align="center">
 
@@ -101,13 +154,17 @@ Our trained router model is available on HuggingFace:
 
 </div>
 
-The router model is a fine-tuned classifier that determines whether to use the Summary (S-path) or Raw (R-path) retrieval pipeline based on query characteristics.
+The router decides whether the query can be answered from the retrieved summaries (**S**) or needs raw evidence (**R**).
+
+The LoCoMo and LongMemEval runners default to a vLLM router at `http://localhost:8000/v1`, with the served model name `Qwen3-0.6B`. Prepare the router endpoint before running them, and use `--router-base-url` and `--router-model` to match your deployment.
 
 ---
 
 ## Quick Start
 
 ### Running Benchmarks
+
+Once the services and dataset paths are configured, start with a small run. The [dataset loaders](core/datasets/) contain the dataset locations and loading options.
 
 **LoCoMo Benchmark** (Concurrent Execution)
 ```bash
@@ -131,9 +188,9 @@ python test_TierMem_memoryagentbench.py \
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `--limit N` | Process only N sessions | All sessions |
-| `--max-workers N` | Number of concurrent workers | 4 |
-| `--model MODEL` | LLM model name | `gpt-4o-mini` |
+| `--limit N` | Process only N sessions | All sessions for LoCoMo/LongMemEval; 2 for MemoryAgentBench |
+| `--max-workers N` | Number of concurrent workers | 1 / 50 / 2 for LoCoMo / LongMemEval / MemoryAgentBench |
+| `--model MODEL` | LLM model name | `gpt-4.1-mini` |
 | `--run-id ID` | Custom run identifier | auto-generated |
 
 > **Tip:** Start with a small `--limit` value to test your setup before running full benchmarks.
@@ -159,65 +216,35 @@ TierMem/
 
 ## Router Training
 
-The router model determines which retrieval path (Summary or Raw) to use for each query. Below is the complete training pipeline:
+The paper trains the Qwen3-0.6B router with supervised fine-tuning followed by GRPO. **Appendix D of our COLM 2026 camera-ready manuscript** ([OpenReview record](https://openreview.net/forum?id=svKCa4itcd)) documents the labels, prompts, reward, and training hyperparameters.
 
-### Training Pipeline
+The repository includes these preparation and evaluation tools:
 
-**Step 1: Build Offline Dataset**
-```bash
-python scripts/router_training/1_build_offline_dataset.py
-```
-Generates training data by running both retrieval paths on sample queries.
+| Resource | Purpose |
+|---|---|
+| [Build offline data](scripts/router_training/1_build_offline_dataset.py) | Combine existing summary-path and raw-path evaluation outputs into paired training records |
+| [Prepare SFT data](scripts/router_training/2_prepare_sft_data_v2.py) | Format distilled routing examples for supervised fine-tuning |
+| [Prepare GRPO data](scripts/router_training/3_prepare_grpo_data.py) | Construct the routing dataset for policy optimization |
+| [Routing reward](scripts/router_training/plugin/router_reward.py) | Reward implementation for router training |
+| [Evaluate the router](scripts/router_training/5_eval_router_online.py) | Evaluate routing decisions online |
 
-**Step 2: Prepare SFT Data**
-```bash
-python scripts/router_training/2_prepare_sft_data_v2.py
-```
-Formats the offline dataset for supervised fine-tuning.
-
-**Step 3: Supervised Fine-Tuning (SFT)**
-```bash
-sbatch scripts/router_training/train_router_sft.sbatch
-```
-Fine-tunes the base model to classify queries.
-
-**Step 4: GRPO Training** *(Optional)*
-```bash
-sbatch scripts/router_training/train_router_grpo.sbatch
-```
-Further optimizes the router using reinforcement learning.
-
-**Step 5: Deploy Router with vLLM**
-```bash
-sbatch scripts/router_training/start_router_vllm.sbatch
-```
-Serves the trained router for inference.
-
-### Configuration
-
-Before running the training scripts, update the following placeholders in the `.sbatch` files:
-- `<PROJECT_ROOT>`: Path to your TierMem installation
-- `<MS_SWIFT_DIR>`: Path to ms-swift installation
-
-> **Note:** Training dependencies (ms-swift, deepspeed, etc.) are listed in `requirements.txt` as optional. Uncomment them if you plan to train the router.
+Use each script's argument definitions to configure input and output paths. Training and serving launch commands depend on your environment; the optional training dependencies are listed in [requirements.txt](requirements.txt).
 
 ---
 
 ## Supported Benchmarks
 
-TierMem has been evaluated on multiple long-context memory benchmarks:
+The paper reports results on LoCoMo and LongMemEval. The repository also includes a MemoryAgentBench runner for further experiments.
 
-| Benchmark | Description | Metrics | Script |
-|-----------|-------------|---------|--------|
-| **LoCoMo** | Long-context memory QA | F1, Accuracy | `test_TierMem_locomo_multi.py` |
-| **LongMemEval** | Long memory evaluation | F1, Accuracy | `test_TierMem_longmemeval_multi.py` |
-| **MemoryAgentBench** | Multi-split agent benchmark | F1, Accuracy | `test_TierMem_memoryagentbench.py` |
-| **HotPotQA** | Multi-hop reasoning QA | F1, EM | *(Coming soon)* |
-| **HaluMem** | Hallucination evaluation | Accuracy | *(Coming soon)* |
+| Benchmark | Coverage | Runner |
+|---|---|---|
+| **LoCoMo** | Main paper evaluation | [LoCoMo runner](test_TierMem_locomo_multi.py) |
+| **LongMemEval** | Main paper evaluation | [LongMemEval runner](test_TierMem_longmemeval_multi.py) |
+| **MemoryAgentBench** | Additional experimental runner | [MemoryAgentBench runner](test_TierMem_memoryagentbench.py) |
 
 ---
 
-## Results
+## Evaluation Outputs
 
 Results are saved to `results/{benchmark}/{system_name}/{run_id}/`:
 
@@ -239,39 +266,34 @@ results/locomo/linked_view/my_run/
 |----------|-------------|----------|
 | `OPENAI_API_KEY` | OpenAI API key | Yes |
 | `OPENAI_BASE_URL` | Custom API endpoint | No |
-| `QDRANT_HOST` | Qdrant server host | No (default: localhost) |
-| `QDRANT_PORT` | Qdrant server port | No (default: 6333) |
+
+For LoCoMo and LongMemEval, configure Qdrant with `--qdrant-host` (default `localhost`) and `--qdrant-port` (default `6333`).
 
 ## Citation
 
-If you use TierMem in your research, please cite our work:
+For now, the citation below refers to the **earlier arXiv preprint**. We'll add the official COLM 2026 BibTeX after confirming the final citation metadata on [OpenReview](https://openreview.net/forum?id=svKCa4itcd).
 
 ```bibtex
 @misc{zhu2026lossyverifiedprovenanceawaretiered,
-      title={From Lossy to Verified: A Provenance-Aware Tiered Memory for Agents}, 
-      author={Qiming Zhu and Shunian Chen and Rui Yu and Zhehao Wu and Benyou Wang},
-      year={2026},
-      eprint={2602.17913},
-      archivePrefix={arXiv},
-      primaryClass={cs.DB},
-      url={https://arxiv.org/abs/2602.17913}, 
+  title         = {From Lossy to Verified: A Provenance-Aware Tiered Memory for Agents},
+  author        = {Qiming Zhu and Shunian Chen and Rui Yu and Zhehao Wu and Benyou Wang},
+  year          = {2026},
+  eprint        = {2602.17913},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.DB},
+  url           = {https://arxiv.org/abs/2602.17913}
 }
 ```
-
-> **Note:** Please update this citation once the paper is published.
 
 ---
 
 ## Contributing
 
-We welcome contributions! Here's how you can help:
+Trying TierMem on your own agent history? We'd like to hear which details your summaries kept, which ones went missing, and whether reopening the source helped. Small examples are especially useful.
 
-- **Report Bugs**: Open an issue describing the bug and how to reproduce it
-- **Suggest Features**: Share your ideas for new features or improvements
-- **Submit PRs**: Fix bugs, add features, or improve documentation
-- **Improve Docs**: Help us make the documentation clearer and more comprehensive
-
-Please ensure your code follows the existing style and includes appropriate tests.
+- For a bug, include the command, configuration, and relevant log excerpt in an [issue](https://github.com/FreedomIntelligence/Tiermem/issues).
+- For an experiment, share the dataset, generator/router settings, and accuracy, token, and latency measurements.
+- Documentation fixes and clearer setup instructions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution details.
 
 ## License
 
@@ -292,8 +314,6 @@ This project builds on excellent open-source work:
 
 <div align="center">
 
-**⭐ If you find TierMem useful, please consider giving us a star! ⭐**
-
-Made with ❤️ by the FreedomIntelligence Team
+Maintained by the FreedomIntelligence team. Thanks for reading, trying the code, and sharing what you find.
 
 </div>
