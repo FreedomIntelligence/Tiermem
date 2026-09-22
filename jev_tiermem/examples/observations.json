@@ -1,0 +1,5 @@
+[
+  {"speaker": "user", "text": "回调重试最多 2 次。", "timestamp": "2026-09-01T09:00:00+08:00", "dia_id": "demo-1"},
+  {"speaker": "tool", "text": "test_slow_callback: 超时为 30 秒时失败，实际耗时 43.2 秒；超时为 60 秒时通过。", "timestamp": "2026-09-01T09:10:00+08:00", "dia_id": "demo-2"},
+  {"speaker": "user", "text": "最终采用 60 秒超时，重试次数仍然最多 2 次。", "timestamp": "2026-09-01T09:12:00+08:00", "dia_id": "demo-3"}
+]

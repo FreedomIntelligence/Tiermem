@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jev-tiermem"
+version = "0.1.0"
+description = "Lightweight summary/raw memory with a Jev sufficiency router"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+live = ["openai>=1.0.0", "typesafe-sdk>=0.7.1,<1", "httpx2>=2,<3"]
+mcp = ["mcp>=1.12,<2"]
+
+[project.scripts]
+jev_tiermem = "jev_tiermem.cli:main"
+jev-tiermem-mcp = "jev_tiermem.mcp_server:main"
+jev-tiermem-agent = "jev_tiermem.agent_loop:main"
+
+[tool.setuptools]
+packages = ["jev_tiermem"]
+package-dir = {jev_tiermem = "."}

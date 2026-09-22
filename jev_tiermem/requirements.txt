@@ -1,0 +1,4 @@
+# Only needed for live summarization, routing and answering.
+openai>=1.0.0
+typesafe-sdk>=0.7.1,<1
+httpx2>=2,<3

@@ -1,0 +1,12 @@
+[mcp_servers.jev_tiermem]
+command = "/absolute/path/Tiermem/jev_tiermem/.venv/bin/python"
+args = [
+  "-m", "jev_tiermem.mcp_server",
+  "--store", "/absolute/path/jev-memory", "--session", "alice/project-a",
+  "--model", "gpt-4.1-mini",
+  "--jev-model", "jev-1.13.0",
+  "--jev-api-url", "https://jevtypesafeai.com/api/v1/decide"
+]
+env_vars = ["OPENAI_API_KEY", "OPENAI_BASE_URL", "TYPESAFE_API_KEY"]
+startup_timeout_sec = 20
+tool_timeout_sec = 300

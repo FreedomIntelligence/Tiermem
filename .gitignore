@@ -5,3 +5,8 @@ model/*
 
 #relatedworkspace
 relatedwork/
+jev_tiermem/AGENT.md
+
+# Local development notes, diagnostics, and memory stores
+/.dev/
+.jev_tiermem/

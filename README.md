@@ -18,10 +18,13 @@ Qiming Zhu · Shunian Chen · Rui Yu · Zhehao Wu · Benyou Wang
 
 [Use cases](#when-this-helps) · [Results](#results) · [Quick start](#quick-start) · [Training](#router-training)
 
+**New: [Exploring TierMem with Jev](jev_tiermem/README.md) — fast recall from notes, precise recovery from raw history.**
+
 </div>
 
 ## News
 
+- **2026-09-22** — Try [**Jev TierMem**](jev_tiermem/README.md): lightweight agent memory with Markdown notes, searchable raw history, and Jev routing. Run the agent, use the Python API, or connect through MCP.
 - **2026-07-08** — Celebrating TierMem's acceptance at **COLM 2026** 🎉 We've refreshed the title and results, and added a walkthrough of memory use during a long debugging session below.
 - **2026-02-20** — The first preprint appeared on [arXiv](https://arxiv.org/abs/2602.17913).
 
@@ -29,6 +32,7 @@ The earlier preprint is titled *From Lossy to Verified: A Provenance-Aware Tiere
 
 ## Table of Contents
 
+- [Jev TierMem: Lightweight Agent Memory](#jev-tiermem-lightweight-agent-memory)
 - [Overview](#overview)
 - [When This Helps](#when-this-helps)
 - [Key Features](#key-features)
@@ -46,6 +50,16 @@ The earlier preprint is titled *From Lossy to Verified: A Provenance-Aware Tiere
 - [Contributing](#contributing)
 - [License](#license)
 - [Acknowledgments](#acknowledgments)
+
+## Jev TierMem: Lightweight Agent Memory
+
+**Fast recall from notes. Precise recovery from raw history.**
+
+[Jev TierMem](jev_tiermem/README.md) gives long-running agents Markdown notes and searchable original messages and tool output. Each note links to its sources. Jev decides when to look beyond the notes, and recovered facts can be written back when supported and useful.
+
+Try the experimental agent with the [quick start](jev_tiermem/README.md#快速开始), run the [memory demo or MCP agent demo](jev_tiermem/README.md#两个可运行-demo), or connect your own agent through [Python](jev_tiermem/examples/README.md#接入自己的-agent) or [MCP](jev_tiermem/integrations/README.md). No router training, mem0, or vector database required.
+
+[Star TierMem](https://github.com/FreedomIntelligence/Tiermem), Watch for updates, and [follow FreedomIntelligence](https://github.com/FreedomIntelligence). Share your use cases in [Issues](https://github.com/FreedomIntelligence/Tiermem/issues).
 
 ## Overview
 
@@ -199,6 +213,7 @@ python test_TierMem_memoryagentbench.py \
 
 ```
 TierMem/
+├── jev_tiermem/                    # Lightweight Jev routing + notes/raw agent memory
 ├── core/                           # Benchmark framework
 │   ├── systems/                   # Memory system interfaces
 │   ├── datasets/                  # Dataset loaders (LoCoMo, LongMemEval, etc.)
