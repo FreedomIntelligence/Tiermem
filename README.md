@@ -12,13 +12,13 @@ Qiming Zhu · Shunian Chen · Rui Yu · Zhehao Wu · Benyou Wang
 
 **Accepted at COLM 2026 🎉**
 
-**Start with compact memory. Recover the details when they matter.**
+**fast recall from notes, precise recovery from raw history**
 
 [Paper / OpenReview](https://openreview.net/forum?id=svKCa4itcd) · [Earlier preprint](https://arxiv.org/abs/2602.17913) · [Model](https://huggingface.co/FreedomIntelligence/TierMem) · [Citation](#citation)
 
 [Use cases](#when-this-helps) · [Results](#results) · [Quick start](#quick-start) · [Training](#router-training)
 
-**New: [Exploring TierMem with Jev](jev_tiermem/README.md) — fast recall from notes, precise recovery from raw history.**
+**New: [Exploring TierMem with Jev](jev_tiermem/README.md)**
 
 </div>
 
