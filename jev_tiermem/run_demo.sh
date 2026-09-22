@@ -10,8 +10,8 @@ case "${1:-mcp}" in
     cat <<'USAGE'
 Usage: bash jev_tiermem/run_demo.sh [coding|mcp] [demo arguments]
 
-coding  Run real tests, write memory, then recall it.
-mcp     Run an agent that chooses when to use memory tools (default).
+coding  Reproduce/fix a CSV import bug, write memory, then recall the details.
+mcp     Let an agent fix the CSV importer and use memory tools on demand (default).
 
 The first run creates jev_tiermem/.venv and installs the declared dependencies.
 Configure the API environment variables described in README before running.

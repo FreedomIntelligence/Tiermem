@@ -1,4 +1,4 @@
-"""Run real tests, write their results to memory, then recall them in a new client.
+"""Reproduce and fix a CSV import bug, then recall the work in a new client.
 
 From the Tiermem checkout, after installing jev_tiermem[live]:
     python jev_tiermem/examples/coding_memory.py
@@ -7,7 +7,6 @@ From the Tiermem checkout, after installing jev_tiermem[live]:
 import argparse
 import json
 import os
-import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,13 +20,10 @@ if __name__ == "__main__":
     ensure_runtime(__file__)
 
 from jev_tiermem import Config, JevTierMem
+from jev_tiermem.examples._coding_scenario import CodingScenario, QUESTION, answer_has_details
 
 
 ROOT = Path(__file__).resolve().parents[2]
-QUESTION = (
-    "What is the fully qualified name of the test containing 'network_failure' "
-    "in tests.log, and what was its result?"
-)
 
 
 def run(args):
@@ -44,23 +40,30 @@ def run(args):
     def save():
         report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
-    print("[1/5] 执行真实 RouterTests，生成 tests.log", flush=True)
-    command = ["-m", "unittest", "jev_tiermem.tests.test_memory.RouterTests", "-v"]
-    completed = subprocess.run(
-        [sys.executable, *command], cwd=ROOT, capture_output=True, text=True, timeout=60,
-    )
-    log = ("Command: python " + " ".join(command) + "\n"
-           + f"Exit code: {completed.returncode}\n" + completed.stdout + completed.stderr)
-    (directory / "tests.log").write_text(log, encoding="utf-8")
-    report["test_exit_code"] = completed.returncode
+    print("[1/5] 复现 CSV 导入失败 → 脚本应用一行修复 → 运行回归测试", flush=True)
+    scenario = CodingScenario(directory)
+    scenario.call("inspect_project", {})
+    before = scenario.call("run_import_tests", {})
+    print("修复前：", flush=True)
+    print(before["text"], flush=True)
+    source = (scenario.workspace / "contacts.py").read_text(encoding="utf-8")
+    patch = scenario.call("write_importer", {"source": source.replace('encoding="utf-8"', 'encoding="utf-8-sig"')})
+    print(patch["text"], flush=True)
+    after = scenario.call("run_import_tests", {})
+    print("修复后：", flush=True)
+    print(after["text"], flush=True)
+    log = scenario.call("coding_history", {})["text"]
+    (directory / "coding.log").write_text(log, encoding="utf-8")
+    report["workspace"] = str(scenario.workspace)
+    report["coding_checks"] = scenario.checks()
     save()
-    if completed.returncode:
-        print(f"测试未通过，请查看 {directory / 'tests.log'}")
+    if not all(report["coding_checks"].values()):
+        print(f"复现或修复检查未通过，请查看 {directory / 'coding.log'}")
         return 2
 
     print("[2/5] 写入原始工具输出 → raw history", flush=True)
     with JevTierMem(directory / "memory", session, config) as memory:
-        raw_ids = memory.observe(log, speaker="tool", dia_id="router-tests")
+        raw_ids = memory.observe(log, speaker="tool", dia_id="csv-import-fix")
         report["raw_ids"] = raw_ids
         report["stored_raw"] = memory.store.get(raw_ids)
         report["raw_preserved"] = "".join(page["text"] for page in report["stored_raw"]) == log
@@ -85,7 +88,7 @@ def run(args):
             return 2
 
     print("[4/5] 关闭旧客户端，重新打开相同 session，仅从记忆回查", flush=True)
-    print("问题：包含 network_failure 的完整测试名是什么？结果如何？", flush=True)
+    print("问题：", QUESTION, flush=True)
     with JevTierMem(directory / "memory", session, config) as memory:
         # No log text or previous model conversation is supplied to the new client.
         answer = memory.answer(QUESTION, writeback=False)
@@ -109,7 +112,7 @@ def run(args):
     sufficient = bool(answer.trace["decisions"] and answer.trace["decisions"][-1]["accepted"])
     report["passed"] = bool(
         answer.supported and sufficient and answer.citations
-        and "RouterTests.test_network_failure_fails_closed" in answer.answer
+        and answer_has_details(answer.answer)
     )
     save()
     print("结果：", "写入和回查均通过" if report["passed"] else "未通过全部检查，请查看实际结果", flush=True)

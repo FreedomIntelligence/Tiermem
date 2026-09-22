@@ -16,7 +16,7 @@ Qiming Zhu · Shunian Chen · Rui Yu · Zhehao Wu · Benyou Wang
 
 [Paper / OpenReview](https://openreview.net/forum?id=svKCa4itcd) · [Earlier preprint](https://arxiv.org/abs/2602.17913) · [Model](https://huggingface.co/FreedomIntelligence/TierMem) · [Citation](#citation)
 
-[Use cases](#when-this-helps) · [Results](#results) · [Quick start](#quick-start) · [Training](#router-training)
+[Use cases](#when-this-helps) · [Benchmarks](#supported-benchmarks) · [Quick start](#quick-start) · [Training](#router-training)
 
 **New: [Exploring TierMem with Jev](jev_tiermem/README.md)**
 
@@ -37,7 +37,6 @@ The earlier preprint is titled *From Lossy to Verified: A Provenance-Aware Tiere
 - [When This Helps](#when-this-helps)
 - [Key Features](#key-features)
 - [Architecture](#architecture)
-- [Results](#results)
 - [Installation](#installation)
 - [Model](#model)
 - [Quick Start](#quick-start)
@@ -58,6 +57,8 @@ The earlier preprint is titled *From Lossy to Verified: A Provenance-Aware Tiere
 [Jev TierMem](jev_tiermem/README.md) gives long-running agents Markdown notes and searchable original messages and tool output. Each note links to its sources. Jev decides when to look beyond the notes, and recovered facts can be written back when supported and useful.
 
 Try the experimental agent with the [quick start](jev_tiermem/README.md#快速开始), run the [memory demo or MCP agent demo](jev_tiermem/README.md#两个可运行-demo), or connect your own agent through [Python](jev_tiermem/examples/README.md#接入自己的-agent) or [MCP](jev_tiermem/integrations/README.md). No router training, mem0, or vector database required.
+
+**Try it on a coding task:** reproduce and fix a CSV import bug, save the debugging history, then ask a fresh agent why the fix was needed. The [runnable walkthrough](jev_tiermem/examples/README.md) shows the original logs, saved notes, Jev routing, and the final answer with source citations.
 
 [Star TierMem](https://github.com/FreedomIntelligence/Tiermem), Watch for updates, and [follow FreedomIntelligence](https://github.com/FreedomIntelligence). Share your use cases in [Issues](https://github.com/FreedomIntelligence/Tiermem/issues).
 

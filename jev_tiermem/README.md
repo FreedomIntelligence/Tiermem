@@ -19,7 +19,7 @@ Jev TierMem 为长任务 agent 提供轻量记忆：用普通 Markdown 笔记保
 配置下方的 [API 环境变量](#2-配置-api)后，从 Tiermem 仓库根目录运行。首次执行会自动创建本机环境并安装依赖：
 
 ```bash
-# 1. 直接体验：执行真实测试 → 写入 raw → 自动生成 summary → 重新打开记忆后回查。
+# 1. 直接体验：复现并修复 CSV 导入 bug → 写入记忆 → 新会话回查。
 bash jev_tiermem/run_demo.sh coding
 
 # 2. Agent 接入：由模型决定何时调用标准 MCP 记忆工具。
@@ -28,17 +28,19 @@ bash jev_tiermem/run_demo.sh mcp
 
 启动脚本根据仓库中的 `pyproject.toml` 安装依赖，之后复用本机的 `jev_tiermem/.venv`，无需退出 Conda `(base)`。`.venv` 由各使用者在本机生成，不需要提交到 Git。
 
-第一个 demo 会展示实际保存的原文、`MEMORY.md` 中的 summary 和 `raw_ids`，再从记忆找回 `RouterTests.test_network_failure_fails_closed` 的完整名称和运行结果。可先看[原文 → 记忆 → 回查的真实例子](examples/README.md#原文保存成了什么记忆)。
+**场景：昨天修好了 Excel CSV 导入，今天换一个 agent 继续 review。** 新 agent 被问到：「为什么改成 `utf-8-sig`？出错文件的前三个字节是什么？客户编号的前导零还在吗？」它需要从记忆中找回修复原因与测试细节。
+
+仓库附带一个可复现的小型 [CSV 导入项目](examples/csv_project/README.md)。第一个 demo 自动执行一行修复，展示失败日志、修复 diff、回归测试，以及实际保存的 `MEMORY.md` 和来源索引；然后关闭客户端重新打开，仅通过记忆回答。可先看[原文 → 记忆 → 回查的实跑记录](examples/README.md#原文保存成了什么记忆)。
 
 第二个 demo 连续运行三个场景：
 
 | 任务 | Agent 如何使用记忆 |
 | --- | --- |
-| 执行 router 测试，并记住结果 | 调用测试工具，然后选择 `observe` 保存原文、`add_summary` 保存自己的摘要 |
-| 回答「2 + 2」 | 正常回答，不需要调用记忆工具 |
-| 新 agent 追问之前的完整测试名和结果 | 调用 `retrieve`，由 Jev 判断 summary / raw，再由 agent 回答并引用证据 |
+| 自己检查 CSV 导入代码、复现并修复 bug | 模型选择读文件、修改代码和测试工具，再用 `observe` / `add_summary` 记住完整过程 |
+| 回答「Python 列表如何去重并保持顺序」 | 正常回答，不需要调用记忆工具 |
+| 新 agent 追问修复原因、文件字节和客户数据 | 调用 `retrieve`，由 Jev 判断 summary / raw，再回答并引用证据 |
 
-终端展示实际工具调用和检查结果。运行文件保存在 `jev_tiermem/.runs/`，每次使用新的 session。两个 demo 都调用真实模型；MCP demo 使用标准接口，Codex/OpenClaw 可通过[相同接口接入](integrations/README.md)。详细步骤见 [demo 说明](examples/README.md)。
+终端展示实际工具调用和检查结果。代码修复发生在 `jev_tiermem/.runs/` 下的项目副本中，每次使用新的 session。示例数据随仓库提供，失败和通过的日志均由现场运行产生。两个 demo 都调用真实模型；MCP demo 使用标准接口，Codex/OpenClaw 可通过[相同接口接入](integrations/README.md)。详细步骤见 [demo 说明](examples/README.md)。
 
 ## 快速开始
 

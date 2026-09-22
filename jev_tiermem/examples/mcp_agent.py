@@ -1,7 +1,7 @@
 """A demo agent that chooses when to call standard Jev TierMem MCP tools.
 
-The demo runs real router tests, saves selected results, handles an unrelated
-question without memory, and starts a fresh agent to recall the earlier tests.
+The agent repairs a CSV importer, saves its work, handles an unrelated question
+without memory, and starts a fresh agent to recall the earlier fix.
 It does not configure or launch Codex/OpenClaw.
 """
 
@@ -9,7 +9,6 @@ import argparse
 import asyncio
 import json
 import os
-import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -27,14 +26,21 @@ from mcp.client.stdio import stdio_client
 
 from jev_tiermem import Config, JevTierMem
 from jev_tiermem.providers import OpenAIModel
+from jev_tiermem.examples._coding_scenario import (
+    CODING_TOOLS, CODING_TOOL_NAMES, CodingScenario, QUESTION, answer_has_details,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
 MEMORY_TOOLS = {"jev_memory_observe", "jev_memory_add_summary", "jev_memory_retrieve"}
-QUESTION = (
-    "What is the fully qualified name of the test containing 'network_failure' "
-    "in tests.log, and what was its result?"
-)
+
+
+def error_types(exc):
+    """Unwrap MCP task-group errors without printing provider response bodies."""
+    nested = getattr(exc, "exceptions", ())
+    return type(exc).__name__ + (" [" + ", ".join(error_types(item) for item in nested) + "]" if nested else "")
+
+
 INSTRUCTION = (
     'You are a coding agent. Return one JSON action per step. To call a tool, return '
     '{"action":"tool","name":"tool name","arguments":{...}}. To finish, return '
@@ -45,7 +51,8 @@ INSTRUCTION = (
     "observe.text; this demo host resolves the reference to the original text before the MCP call. "
     "Do not retype the log into the observe arguments. Never make up source IDs or claim a write "
     "before success. "
-    "Keep summaries to one short sentence; exact test names and log details remain in raw history. "
+    "Keep summaries to one short sentence describing the fix and outcome; fixture bytes and values remain in raw history. "
+    "After coding, call coding_history to obtain the complete transcript and save its memory_text_ref. "
     "When a question needs earlier results absent from your current context, retrieve them. "
     "Pass the historical question unchanged as the retrieval query and set deepsearch=false "
     "so Jev can first check summaries. Answer only from returned evidence and cite its IDs. "
@@ -56,15 +63,16 @@ INSTRUCTION = (
 
 
 class DemoAgent:
-    def __init__(self, client, model, tool_specs, events):
+    def __init__(self, client, model, tool_specs, events, scenario=None):
         self.client, self.model, self.tool_specs, self.events = client, model, tool_specs, events
+        self.scenario = scenario
         self.recent = []
         self.tool_outputs = {}
 
     async def run(self, task):
         self.recent.append({"role": "user", "text": task})
         events = []
-        for _ in range(10):
+        for _ in range(14):
             action = self.model.complete("demo_agent", INSTRUCTION, {
                 "task": task, "recent": self.recent, "tools": self.tool_specs,
             })
@@ -75,16 +83,13 @@ class DemoAgent:
             if action.get("action") != "tool" or not isinstance(arguments, dict):
                 raise ValueError("Expected a JSON tool action")
             print("  tool →", name, flush=True)
-            if name == "run_router_tests":
-                completed = subprocess.run(
-                    [sys.executable, "-m", "unittest", "jev_tiermem.tests.test_memory.RouterTests", "-v"],
-                    cwd=ROOT, capture_output=True, text=True, timeout=60,
-                )
-                output = {"file": "tests.log", "exit_code": completed.returncode,
-                          "text": completed.stdout + completed.stderr}
+            if name in CODING_TOOL_NAMES and self.scenario is not None:
+                output = self.scenario.call(name, arguments)
                 reference = "tool-output:" + uuid4().hex
                 self.tool_outputs[reference] = output["text"]
                 output["memory_text_ref"] = reference
+                if name in {"run_import_tests", "write_importer"}:
+                    print(output["text"], flush=True)
             elif name in MEMORY_TOOLS:
                 if name == "jev_memory_observe" and str(arguments.get("text", "")).startswith("tool-output:"):
                     # Resolve only on an explicit model request; the wire API still receives plain text.
@@ -127,6 +132,7 @@ async def run(args):
         server_args.extend(["--jev-api-url", args.jev_api_url])
     parameters = StdioServerParameters(command=sys.executable, args=server_args, env=dict(os.environ))
     model = OpenAIModel(config)
+    scenario = None
     try:
         with (directory / "mcp.log").open("w", encoding="utf-8") as server_log:
             async with stdio_client(parameters, errlog=server_log) as (reader, writer):
@@ -136,13 +142,15 @@ async def run(args):
                     available = (await client.list_tools()).tools
                     specs = [{"name": tool.name, "description": tool.description,
                               "arguments": tool.inputSchema} for tool in available if tool.name in MEMORY_TOOLS]
-                    specs.append({"name": "run_router_tests", "description": "Run the real repository router unit tests; returns their complete log.",
-                                  "arguments": {"type": "object", "properties": {}}})
-                    first = DemoAgent(client, model, specs, report["events"])
-                    print("[1/3] 运行测试；由 agent 选择工具保存原文和摘要", flush=True)
+                    scenario = CodingScenario(directory)
+                    report["workspace"] = str(scenario.workspace)
+                    first = DemoAgent(client, model, specs + CODING_TOOLS, report["events"], scenario)
+                    print("[1/3] Agent 复现并修复 CSV 导入 bug，选择工具保存原文和摘要", flush=True)
                     report["remember"] = await first.run(
-                        "Run the router unit tests. Save the original tests.log output and a short "
-                        "summary in memory so another session can recall the results later."
+                        "Excel 导出的联系人 CSV 导入失败。先 inspect_project，再 run_import_tests 复现；"
+                        "只修改 contacts.py 修复问题，然后重新运行测试。客户编号和姓名必须原样保留，"
+                        "普通 UTF-8 CSV 仍需可读。完成后将 coding_history 的完整原文和一句简短摘要写入记忆，"
+                        "方便另一个会话继续 review。请用中文回答。"
                     )
                     print(report["remember"]["answer"], flush=True)
                     saved = report["remember"]["events"]
@@ -167,8 +175,10 @@ async def run(args):
                                                      if inspector.store.memory_path.exists() else "")
                     print("已保存的 MEMORY.md（包含宿主摘要和原文索引）：", flush=True)
                     print(report["memory_markdown"] or "尚未写入 summary。", flush=True)
-                    print("[2/3] 普通问题：2 + 2，只回答数字", flush=True)
-                    report["ordinary"] = await first.run("What is 2 + 2? Answer only the number.")
+                    print("[2/3] 无关 coding 问题：Python 列表去重并保持顺序，只给出表达式", flush=True)
+                    report["ordinary"] = await first.run(
+                        "一个独立的小问题：Python 中如何对字符串列表 items 去重并保持顺序？只给出表达式。"
+                    )
                     print(report["ordinary"]["answer"], flush=True)
 
                     print("[3/3] 新 agent：没有之前的对话和测试输出，按需查询记忆", flush=True)
@@ -189,20 +199,19 @@ async def run(args):
                     linked = [raw_id for event in saved if event["tool"] == "jev_memory_add_summary"
                               for raw_id in event["arguments"]["raw_ids"]]
                     evidence = [item for result in retrieved for item in result["evidence"]]
-                    original_logs = [e["result"]["text"] for e in saved if e["tool"] == "run_router_tests"]
+                    original_log = scenario.call("coding_history", {})["text"]
                     report["checks"] = {
-                        "tests_passed": any(e["tool"] == "run_router_tests" and e["result"]["exit_code"] == 0 for e in saved),
+                        **scenario.checks(),
                         "raw_saved": bool(observed),
-                        "original_log_preserved": bool(original_logs) and all(log in "".join(p["text"] for p in stored) for log in original_logs),
+                        "original_log_preserved": bool(original_log) and original_log in "".join(p["text"] for p in stored),
                         "summary_written": any(e["tool"] == "jev_memory_add_summary" and e["result"]["status"] == "written" for e in saved),
                         "summary_links_to_raw": bool(linked) and set(linked) <= set(observed),
                         "ordinary_task_no_memory_calls": not any(e["tool"] in MEMORY_TOOLS for e in report["ordinary"]["events"]),
-                        "ordinary_answer_correct": report["ordinary"]["answer"].strip() == "4",
                         "fresh_context": report["fresh_context"],
                         "memory_retrieved": bool(retrieved) and any(r["sufficient"] for r in retrieved),
-                        "test_name_recovered": "RouterTests.test_network_failure_fails_closed" in report["recall"]["answer"],
+                        "historical_details_recovered": answer_has_details(report["recall"]["answer"]),
                         "evidence_cited": any(item["id"] in report["recall"]["answer"] for item in evidence),
-                        "no_test_rerun": not any(e["tool"] == "run_router_tests" for e in report["recall"]["events"]),
+                        "no_workspace_access_on_recall": not any(e["tool"] in CODING_TOOL_NAMES for e in report["recall"]["events"]),
                         "tasks_completed": all(report[key]["complete"] for key in ("remember", "ordinary", "recall")),
                     }
                     report["passed"] = all(report["checks"].values())
@@ -210,8 +219,13 @@ async def run(args):
                         print(f"Jev route={result['route']}, sufficient={result['sufficient']}", flush=True)
                     print("普通问题记忆调用次数：", sum(e["tool"] in MEMORY_TOOLS for e in report["ordinary"]["events"]), flush=True)
                     print("结果：", "全部通过" if report["passed"] else "未通过全部检查", flush=True)
+    except Exception as exc:
+        report["error"] = error_types(exc)
+        raise
     finally:
         model.close()
+        if scenario is not None:
+            (directory / "coding.log").write_text(scenario.call("coding_history", {})["text"], encoding="utf-8")
         report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print("完整记录：", report_path, flush=True)
     return 0 if report.get("passed") else 2
@@ -231,7 +245,7 @@ def main():
     try:
         return asyncio.run(run(args))
     except Exception as exc:
-        print(f"示例未完成：{type(exc).__name__}。已保存的记录在 {args.store}。", file=sys.stderr)
+        print(f"示例未完成：{error_types(exc)}。已保存的记录在 {args.store}。", file=sys.stderr)
         return 1
 
 

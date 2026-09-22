@@ -1,74 +1,103 @@
 # 使用示例
 
-先完成 [API 配置](../README.md#2-配置-api)。以下命令均在 Tiermem 仓库根目录执行；启动脚本会自动创建环境并安装所需依赖。
+**昨天修好的 bug，今天换一个 agent，还能解释为什么这样改吗？**
+
+这两个 demo 围绕同一个 coding 任务：联系人 CSV 导入支持普通 UTF-8，却在读取带 BOM 的 Excel 导出文件时报错。修复需要保留客户编号的前导零和姓名中的逗号。项目、CSV 和回归测试都[随仓库提供](csv_project/README.md)，是可复现的示例；日志来自现场执行。
+
+先完成 [API 配置](../README.md#2-配置-api)，然后在 Tiermem 仓库根目录运行：
+
+```bash
+bash jev_tiermem/run_demo.sh coding  # 最短流程：修复 → 写记忆 → 换会话回查
+bash jev_tiermem/run_demo.sh mcp     # 完整 agent：模型自己修复，按需调用 MCP 记忆工具
+```
+
+首次执行会自动安装依赖。两个入口都在 `.runs/` 中创建项目副本，结束后保留修复代码、完整日志与记忆。
 
 ## Demo 1：写入记忆，再重新打开使用
 
-```bash
-bash jev_tiermem/run_demo.sh coding
-```
+`coding` 入口自动完成以下过程：
 
-脚本完整执行以下流程，无需手工准备 summary 或原文：
+1. 读取示例代码和 CSV 字节，运行测试，复现 `KeyError: 'customer_id'`。
+2. 脚本将 `contacts.py` 的读取编码从 `utf-8` 改成 `utf-8-sig`，重新运行三项回归测试。
+3. 用 `observe` 原样保存代码检查、失败日志、实际 diff 和成功日志；用 `compact` 生成简短 summary，绑定来源 `raw_ids`。
+4. 关闭客户端，重新打开相同 session。新客户端只有问题，通过记忆恢复先前工作。
 
-1. 执行仓库中的真实 router 单元测试，生成 `tests.log`。
-2. 用 `observe` 原样保存测试输出。
-3. 用普通文本模型生成简短 summary，绑定原文 `raw_ids`。
-4. 关闭客户端，再用同一个 session 打开记忆。
-5. 追问包含 `network_failure` 的完整测试名及其结果，由 Jev 路由并返回答案与证据。
+这个入口的代码修复由脚本执行；想看模型自己选择修复和记忆工具，运行下面的 MCP demo。
 
 ### 原文保存成了什么记忆
 
-下面是一次实际运行保存的内容。测试日志由程序执行命令产生，summary 由文本模型当场生成。
+以下内容来自一次成功实跑，summary 和最终答案均由模型当场生成。
 
-**① 原文：写入 `raw.sqlite3` 的测试日志。** `observe` 原样保存，返回原文 ID `r-a488cdf77476b87040ec8a45`：
+**① 原文：真实文件、失败日志、diff、回归结果。** `coding.log` 完整保存执行过程，下面是节选：
 
 ```text
-Command: python -m unittest jev_tiermem.tests.test_memory.RouterTests -v
-Exit code: 0
-test_all_write_conditions_required (jev_tiermem.tests.test_memory.RouterTests.test_all_write_conditions_required) ... ok
-test_invalid_or_missing_probability_fails_closed (jev_tiermem.tests.test_memory.RouterTests.test_invalid_or_missing_probability_fails_closed) ... ok
-test_network_failure_fails_closed (jev_tiermem.tests.test_memory.RouterTests.test_network_failure_fails_closed) ... ok
-test_threshold_and_usage (jev_tiermem.tests.test_memory.RouterTests.test_threshold_and_usage) ... ok
+Fixture: fixtures/excel_export.csv
+First three bytes (hex): ef bb bf
+Decoded with utf-8 (repr): '\ufeffcustomer_id,name,email\n00073,"Chen, Mei",mei@example.com\n'
+
+KeyError: 'customer_id'
+FAILED (errors=1)
+```
+
+实际修复只有一行：
+
+```diff
+-    with open(path, encoding="utf-8", newline="") as stream:
++    with open(path, encoding="utf-8-sig", newline="") as stream:
+```
+
+修复后，实际测试输出包含：
+
+```text
+Regression values: customer_id='00073', name='Chen, Mei'
+test_excel_utf8_bom (check_contacts.ContactImportTests.test_excel_utf8_bom) ... ok
+test_plain_utf8 (check_contacts.ContactImportTests.test_plain_utf8) ... ok
+test_preserves_leading_zero_and_quoted_comma (check_contacts.ContactImportTests.test_preserves_leading_zero_and_quoted_comma) ... ok
 
 ----------------------------------------------------------------------
-Ran 4 tests in 0.000s
+Ran 3 tests in 0.000s
 
 OK
 ```
 
-**② 记忆：实际落盘的 `MEMORY.md`。** `compact` 调用普通文本模型概括日志，再由 Jev TierMem 保存摘要与来源索引：
+**② 记忆：实际保存的 `MEMORY.md`。** Jev TierMem 将完整原文分页写入 SQLite，普通文本模型概括成笔记，程序绑定来源索引：
 
 ```markdown
 # Memory
 
-<!-- jev_tiermem {"id": "s-f62b689845bc513b1d3bcf2b", "raw_ids": ["r-a488cdf77476b87040ec8a45"], "kind": "summary"} -->
-- Tool: `python -m unittest jev_tiermem.tests.test_memory.RouterTests -v` passed.
-- 4 tests OK: write conditions, invalid/missing probability fails closed, network failure fails closed, threshold/usage.
+<!-- jev_tiermem {"id": "s-b0e622ee3c8e918c265a48b4", "raw_ids": ["r-f5a753bd21284cf1e27ab7c3", "r-25079f93c71b04e46485bad4"], "kind": "summary"} -->
+- Tool task: repair CSV import **without changing customer IDs/names**.
+- Obs: BOM CSV caused `KeyError 'customer_id'`; plain CSV passed.
+- Fix applied in `contacts.py`: `utf-8`→`utf-8-sig`.
+- Result: all 3 tests passed.
 <!-- /jev_tiermem -->
 ```
 
-其中 `s-...` 是摘要 ID，`raw_ids` 指向上面的原始日志。摘要记住了“4 项测试通过”，原文保留完整测试名等细节。索引由 Jev TierMem 根据实际保存的记录建立。
+这条 summary 记住了修复原因、编码选择与测试结果，没有保存文件的十六进制字节和客户数据。`raw_ids` 指向完整原文的两页，细节仍能找回。**原文与笔记均由 Jev TierMem 存储，不依赖宿主保留旧对话。**
 
-**③ 后续提问：新客户端只接收问题，通过记忆找回细节。** 问的是“之前日志中包含 `network_failure` 的完整测试名是什么？结果如何？”demo 实际传入的英文问题是：
+**③ 新会话提问：**
 
-> What is the fully qualified name of the test containing 'network_failure' in tests.log, and what was its result?
+> 上次 CSV 导入为什么不能直接用 utf-8？请从之前的记录找出：修复后用的编码、触发失败的 CSV 文件的前三个字节（十六进制），以及回归测试保留的客户编号和姓名。请引用记忆证据。
 
-**④ 模型最终回答：**
-
-> jev_tiermem.tests.test_memory.RouterTests.test_network_failure_fails_closed — ok
-
-引用证据为 `r-a488cdf77476b87040ec8a45`。摘要保存了测试通过的概况；完整函数路径从该原始日志恢复。此次路由与检查结果：
+**④ Jev 路由：**
 
 ```text
 summary: 不足
 raw history: 足够
 route: R
-结果：写入和回查均通过
 ```
 
-运行 demo 时会直接打印从存储读回的原文和 `MEMORY.md`，相同内容也保存在本次 `result.json` 的 `stored_raw`、`notes`、`memory_markdown` 中。
+Jev 先检查问题与摘要，发现具体值不足，再沿来源索引找到 raw。此次第一轮原文检索就已足够；没有启动额外补搜，也没有重新读文件或运行测试。
 
-每次模型生成的笔记和路由可能不同。脚本保留真实的充分性判断；写入、来源索引或回查检查未通过时返回非零退出码。
+**⑤ 模型实际回答：**
+
+> 上次不能直接用 utf-8，是因为触发失败的 CSV 是带 BOM 的 UTF-8 文件；用 utf-8 解码后内容开头变成 '\ufeffcustomer_id'，导致读取时表头不是 'customer_id'，从而在导入时触发 KeyError: 'customer_id'。修复后改用的编码是 utf-8-sig。触发失败的 CSV 文件前三个字节（十六进制）是 ef bb bf。回归测试保留的客户编号和姓名是 customer_id='00073'，name='Chen, Mei'。
+
+引用证据：`r-f5a753bd21284cf1e27ab7c3`, `r-25079f93c71b04e46485bad4`。
+
+终端会展示从存储读回的原文、`MEMORY.md`、路由与答案。`result.json` 保存相同内容并检查：bug 确实复现、修复后测试通过、原文无损、summary 来源有效、Jev 判断证据足够、回答恢复了具体值并引用证据。
+
+模型每次的笔记、措辞和路由可能不同。若摘要已经足够，可以走 S；demo 不强制走 R，也不把失败的鉴权或充分性判断算作通过。
 
 ## Demo 2：Agent 按需调用 MCP 记忆工具
 
@@ -76,69 +105,72 @@ route: R
 bash jev_tiermem/run_demo.sh mcp
 ```
 
-这个 demo 使用真实文本模型作为宿主 agent，并连接本地 Jev TierMem MCP 服务。模型自行选择工具、生成摘要和最终回答；脚本只安排三个任务并检查实际行为。
+同一个 CSV 项目，这次由真实文本模型自己选择读代码、运行测试、修改 `contacts.py`，然后调用标准 MCP 工具保存记忆。脚本只提供小项目、工具和任务，并检查实际结果。
 
-| 顺序 | 任务 | 检查内容 |
-| --- | --- | --- |
-| 1 | 运行 router 测试，记住结果 | 真实测试通过，完整输出写入 raw，摘要指向正确来源 |
-| 2 | 回答 `2 + 2` | 普通问题没有调用记忆工具 |
-| 3 | 新 agent 回查之前的完整测试名及结果 | 新实例没有旧对话，使用 `retrieve` 找回证据并引用，不重新跑测试 |
-
-一次实跑的工具调用和输出节选（证据 ID 已简写）：
+一次成功实跑的调用顺序：
 
 ```text
-[1/3] 运行测试并记住结果
-  tool → run_router_tests
+[1/3] Agent 复现并修复 CSV 导入 bug，保存记忆
+  tool → inspect_project
+  tool → run_import_tests
+  tool → write_importer
+  tool → run_import_tests
+  tool → coding_history
   tool → jev_memory_observe
   tool → jev_memory_add_summary
-  summary: Router unit tests passed: 4 tests ran successfully (OK).
-  来源: r-…
 
-[2/3] 2 + 2
-4
+[2/3] 独立问题：Python 列表如何去重并保持顺序？
+list(dict.fromkeys(items))
 
-[3/3] 新 agent 回查
+[3/3] 新 agent：没有旧对话、没有文件访问工具
   tool → jev_memory_retrieve
   summary: 不足
   raw: 足够
-jev_tiermem.tests.test_memory.RouterTests.test_network_failure_fails_closed — ok.
-Evidence: r-…
+Jev route=R, sufficient=True
 普通问题记忆调用次数：0
 结果：全部通过
 ```
 
-这次 MCP demo 的原文是同一组真实测试输出（不含 Demo 1 额外添加的 `Command` / `Exit code` 两行），通过 `jev_memory_observe` 保存为 `r-4fea38ce678fa91240814aca`。宿主 agent 生成一句摘要，调用 `jev_memory_add_summary` 后，实际文件内容为：
+第一次测试确实失败，模型提交的实际 diff 将 `utf-8` 改为 `utf-8-sig`，再次测试后通过。随后 agent 请求完整 `coding_history`，用 `jev_memory_observe` 保存这份原文，再自行撰写摘要交给 `jev_memory_add_summary`。实际保存的文件：
 
 ```markdown
 # Memory
 
-<!-- jev_tiermem {"id": "s-bd8c20a88d3930f7170d6832", "raw_ids": ["r-4fea38ce678fa91240814aca"], "kind": "summary"} -->
-Router unit tests passed: 4 tests ran successfully (OK).
+<!-- jev_tiermem {"id": "s-cf886fafb85af60ab4db8707", "raw_ids": ["r-37b9fa7dfa8cfe33a4b35478", "r-31ec7493cbfea02107594a43"], "kind": "summary"} -->
+将 contacts.py 改为使用 utf-8-sig 读取，修复 Excel UTF-8 BOM 联系人 CSV 导入失败，同时保持客户编号前导零、姓名内容和普通 UTF-8 CSV 读取正常。
 <!-- /jev_tiermem -->
 ```
 
-**记录由 Jev TierMem 完成。** 两个 demo 都将原文存入我们的 SQLite，将带来源的摘要写入我们的 `MEMORY.md`；区别在于谁生成摘要：
+新 agent 被问到与 Demo 1 相同的问题后，最终回答如下：
 
-| 步骤 | Demo 1：直接使用记忆 | Demo 2：宿主通过 MCP 接入 |
+> 不能直接用 `utf-8` 的原因是失败的那个 CSV 实际带有 UTF-8 BOM；记录里显示 `excel_export.csv` 的前三个字节是 `ef bb bf`，用纯 `utf-8` 解码后表头会变成 `\ufeffcustomer_id`，所以读取 `row["customer_id"]` 时触发 `KeyError`。[r-37b9fa7dfa8cfe33a4b35478]
+>
+> 之前修复后改用的编码是 `utf-8-sig`；补丁把 `open(path, encoding="utf-8")` 改成了 `open(path, encoding="utf-8-sig")`，随后测试全部通过。[r-31ec7493cbfea02107594a43]
+>
+> 回归测试保留的客户编号和姓名是：
+> - 客户编号：`00073`
+> - 姓名：`Chen, Mei`
+>
+> 这也在测试输出的回归值里直接记录了：`customer_id='00073', name='Chen, Mei'`。[r-37b9fa7dfa8cfe33a4b35478][r-31ec7493cbfea02107594a43]
+
+新 agent 仅通过 `jev_memory_retrieve` 获取旧信息。终端中展示原文和记忆文件的步骤不会把这些内容注入它的对话。
+
+### 谁负责“记”和“用”
+
+| 步骤 | Demo 1：Python API | Demo 2：宿主通过 MCP 接入 |
 | --- | --- | --- |
-| 保存原文 | `observe` 写入 SQLite | agent 调用 `jev_memory_observe`，服务端写入 SQLite |
-| 生成摘要 | `compact` 调用配置的普通文本模型 | 宿主 agent 自己生成摘要 |
-| 保存摘要及索引 | Jev TierMem 写入 `MEMORY.md`，绑定原文 IDs | `jev_memory_add_summary` 写入 `MEMORY.md`，验证并保存宿主传入的原文 IDs |
-| 判断证据是否足够 | Jev | Jev |
+| 执行修复 | 脚本应用一行修改，实际运行测试 | 模型选择工具并生成修改代码，实际运行测试 |
+| 保存原文 | `observe` 写入 SQLite | agent 选择 `jev_memory_observe`，服务端写入 SQLite |
+| 生成 summary | `compact` 调用配置的普通文本模型 | 宿主 agent 生成一句摘要 |
+| 保存笔记及索引 | Jev TierMem 写入 `MEMORY.md`，绑定 raw IDs | `jev_memory_add_summary` 验证来源 IDs 后保存 |
+| 判断是否回查原文 | Jev | Jev |
+| 最终回答 | `answer` 调用普通文本模型 | MCP 返回证据，由宿主 agent 回答 |
 
-MCP demo 也会读回并显示实际原文和记忆文件；这部分展示不会注入新 agent 的对话。
+此 demo 在修复完成这个节点记一次；回忆时才检索。你也可以让自己的 agent 在关键测试、阶段结束等节点主动写入。写入工具 `observe` / `add_summary` 本身不调用模型；摘要由宿主提供时无需再调用一次摘要模型。
 
-新 agent 被问到同样的完整测试名和结果时，实际最终回答为：
+为了无损保存日志，模型选择 `coding_history` 返回的引用，宿主代码把引用解析为完整原文后发起标准 MCP 写入请求；不会让模型手工重抄日志。这只是 demo 的本地工具辅助，MCP 服务仍接收普通文本。
 
-> jev_tiermem.tests.test_memory.RouterTests.test_network_failure_fails_closed — ok. Evidence: r-4fea38ce678fa91240814aca
-
-这条回答来自 `jev_memory_retrieve` 返回的历史证据：summary 只写了“4 tests ran successfully”，Jev 判断不足后回查 raw，找到完整名称和 `ok`。新 agent 没有拿到上一轮对话，也没有重新执行测试。
-
-写入工具 `jev_memory_observe` 和 `jev_memory_add_summary` 不调用模型：摘要由宿主 agent 提供。检索工具 `jev_memory_retrieve` 调用 Jev 判断证据是否足够，返回证据供宿主作答；必要时 deepsearch 使用服务端文本模型改写查询。
-
-保存工具输出时，模型选择结果引用，由 demo 的宿主代码将其解析成完整原文，再发送标准 MCP 写入请求，避免模型重新抄写日志。
-
-示例为宿主暴露三个核心记忆工具，服务端仍保留完整的八个 MCP 工具。连接 Codex/OpenClaw 时使用同一套[标准 MCP 接口和配置](../integrations/README.md)。
+示例向宿主暴露三个核心记忆工具；服务端保留完整的八个工具，Codex/OpenClaw 可通过[相同标准接口接入](../integrations/README.md)。
 
 ## 检索流程与 deepsearch
 
@@ -169,11 +201,11 @@ Jev 接收原问题与证据文本，返回充分性分数。下面是兼容接�
 {
   "model": "jev-1.13.0",
   "state": {
-    "query": "包含 network_failure 的完整测试名及结果是什么？",
+    "query": "上次 CSV 导入失败的文件前三个字节是什么？",
     "evidence": [
       {
         "id": "r-...",
-        "text": "test_network_failure_fails_closed (...) ... ok",
+        "text": "Fixture: fixtures/excel_export.csv\nFirst three bytes (hex): ef bb bf",
         "speaker": "tool"
       }
     ]
@@ -187,7 +219,7 @@ Jev 接收原问题与证据文本，返回充分性分数。下面是兼容接�
 }
 ```
 
-需要补搜时，普通文本模型收到 `task: "search"`，以及 `query`、`summaries`、`raw`、`previous_queries` 四个字段，分别是原问题、相关摘要、累计原文和已经用过的查询。它返回类似 `{"queries": ["network_failure", "RouterTests"]}` 的搜索建议，再由程序查询 SQLite。Jev 负责判断，普通文本模型负责提出查询，SQLite 负责实际检索。
+需要补搜时，普通文本模型收到 `task: "search"`，以及 `query`、`summaries`、`raw`、`previous_queries` 四个字段，分别是原问题、相关摘要、累计原文和已经用过的查询。它返回类似 `{"queries": ["excel_export", "First three bytes"]}` 的搜索建议，再由程序查询 SQLite。Jev 负责判断，普通文本模型负责提出查询，SQLite 负责实际检索。
 
 ### 怎样看运行结果
 
@@ -257,12 +289,11 @@ python -m jev_tiermem.agent_loop \
 
 ## 接入自己的 agent
 
-需要保存一个工具结果时，用 `observe` 写入原文，再用 `add_summary` 保存宿主生成的阶段摘要。下面先生成一份真实测试输出，再回查它：
+需要保存一个工具结果时，用 `observe` 写入原文，再用 `add_summary` 保存宿主生成的阶段摘要。下面读取示例 CSV，保存记录，再通过记忆检索细节：
 
 ```python
 import os
-import subprocess
-import sys
+from pathlib import Path
 from jev_tiermem import Config, JevTierMem
 
 config = Config(
@@ -271,16 +302,16 @@ config = Config(
     jev_api_url=os.environ.get("JEV_API_URL") or None,
 )
 
-with JevTierMem("jev_tiermem/.runs/memory", "python-demo", config) as memory:
-    completed = subprocess.run(
-        [sys.executable, "-m", "unittest", "jev_tiermem.tests.test_memory.RouterTests", "-v"],
-        capture_output=True, text=True, check=True,
-    )
-    output = completed.stdout + completed.stderr
-    raw_ids = memory.observe(output, speaker="tool")
-    memory.add_summary("已执行 RouterTests，完整结果见测试日志。", raw_ids)
+path = Path("jev_tiermem/examples/csv_project/fixtures/excel_export.csv")
+data = path.read_bytes()
+output = f"File: {path.name}\nFirst three bytes: {data[:3].hex(' ')}\n{data.decode('utf-8')!r}"
 
-    result = memory.retrieve("网络异常测试的完整函数名及结果是什么？")
+with JevTierMem("jev_tiermem/.runs/memory", "python-demo", config) as memory:
+    raw_ids = memory.observe(output, speaker="tool")
+    memory.add_summary("已检查联系人 CSV 导出文件，原始字节与内容见来源记录。", raw_ids)
+
+with JevTierMem("jev_tiermem/.runs/memory", "python-demo", config) as memory:
+    result = memory.retrieve("之前 CSV 文件的前三个字节是什么？客户编号和姓名是什么？")
     print(result["route"], result["sufficient"], result["evidence"])
 ```
 
