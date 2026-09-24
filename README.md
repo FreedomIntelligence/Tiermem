@@ -12,7 +12,7 @@ Qiming Zhu · Shunian Chen · Rui Yu · Zhehao Wu · Benyou Wang
 
 **Accepted at COLM 2026 🎉**
 
-**Fast recall from notes, Precise recovery from raw history**
+**Think fast with summaries. Dig deep into raw history**
 
 [Paper / OpenReview](https://openreview.net/forum?id=svKCa4itcd) · [Earlier preprint](https://arxiv.org/abs/2602.17913) · [Model](https://huggingface.co/FreedomIntelligence/TierMem) · [Citation](#citation)
 
