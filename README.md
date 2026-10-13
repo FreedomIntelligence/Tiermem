@@ -2,7 +2,6 @@
 
 # TierMem: Balancing Compressed Memory and Raw Evidence for Long-Horizon Agent Memory
 
-[![COLM 2026]]
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![HuggingFace Model](https://img.shields.io/badge/🤗%20HuggingFace-Model-orange)](https://huggingface.co/FreedomIntelligence/TierMem)
