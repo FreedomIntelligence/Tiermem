@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "source_snapshot": "retained AGMS router training data",
+  "selection": "GRPO v7 primary train/validation inputs and companion SFT, offline, and teacher records",
+  "selection_notes": [
+    "GRPO filenames follow the paths referenced by the released checkpoint metadata.",
+    "The offline input is the original router_offline version used in the recovered v6-to-v7 filtering lineage; experimental offline_v2 is archived.",
+    "Teacher files are complementary shards, not separate dataset versions."
+  ],
+  "directories": [
+    "router_distilled",
+    "router_grpo_v7",
+    "router_offline",
+    "router_sft"
+  ],
+  "files": [
+    {
+      "path": "router_grpo_v7/train_grpo.jsonl",
+      "size": 8040324,
+      "sha256": "bf80a695d8a06a8166ef227a7b1612f41ed4722bf86feae4a2e6f1c5b5031028",
+      "mtime_ns": 1768499623856003397,
+      "source_changed_during_read": false
+    },
+    {
+      "path": "router_grpo_v7/val_grpo.jsonl",
+      "size": 1181102,
+      "sha256": "1d734a90bc2a77e8242fe1a42c5305e36aea9a0dca76279524ec9b17e18a9e98",
+      "mtime_ns": 1768324268016309208,
+      "source_changed_during_read": false
+    },
+    {
+      "path": "router_sft/train_with_thinking.jsonl",
+      "size": 1796070,
+      "sha256": "1699a0cfbfa728c961406e341eadd2e65f91f77a84d723f3263be455d6c71644",
+      "mtime_ns": 1767689775941084935,
+      "source_changed_during_read": false
+    },
+    {
+      "path": "router_offline/all.jsonl",
+      "size": 4160041,
+      "sha256": "3af97fabed16fe4ea89e0ef8091099c3db9eec12102d45889297f82edcc5b911",
+      "mtime_ns": 1767518466865288276,
+      "source_changed_during_read": false
+    },
+    {
+      "path": "router_distilled/mab_s_fail_r_ok.jsonl",
+      "size": 1132042,
+      "sha256": "539f66d086a2fdb89bbc7abe2b8f5905750ebfe0a33a73a6392c221e8cd63456",
+      "mtime_ns": 1767457518498327088,
+      "source_changed_during_read": false
+    },
+    {
+      "path": "router_distilled/mab_s_ok_r_ok.jsonl",
+      "size": 306160,
+      "sha256": "753cb45320c81642275cad0741d275c7a69be5bbc5f61bf5fad1878fac878c33",
+      "mtime_ns": 1767342816899382157,
+      "source_changed_during_read": false
+    },
+    {
+      "path": "router_distilled/locomo_s_fail_r_ok.jsonl",
+      "size": 50134,
+      "sha256": "8821bf881a653d7f2c3867b285e80e5588658b95a264d283d661bef066b176e5",
+      "mtime_ns": 1767343153168711254,
+      "source_changed_during_read": false
+    },
+    {
+      "path": "router_distilled/locomo_s_ok_r_ok.jsonl",
+      "size": 36523,
+      "sha256": "a9cd42d7c0c79ba605317e63b05422ca85d1aabd092d68a049734874fd795e65",
+      "mtime_ns": 1767343367216557272,
+      "source_changed_during_read": false
+    }
+  ],
+  "file_count": 8,
+  "total_bytes": 16702396,
+  "paper_final_run_correspondence": "not verified",
+  "local_verification": {
+    "all_sha256_match": true,
+    "disk_sha256_checked": 8,
+    "key_jsonl_rows": {
+      "router_grpo_v7/train_grpo.jsonl": 1576,
+      "router_grpo_v7/val_grpo.jsonl": 256,
+      "router_sft/train_with_thinking.jsonl": 549,
+      "router_offline/all.jsonl": 2000,
+      "router_distilled/mab_s_fail_r_ok.jsonl": 260,
+      "router_distilled/mab_s_ok_r_ok.jsonl": 80,
+      "router_distilled/locomo_s_fail_r_ok.jsonl": 20,
+      "router_distilled/locomo_s_ok_r_ok.jsonl": 20
+    }
+  }
+}
